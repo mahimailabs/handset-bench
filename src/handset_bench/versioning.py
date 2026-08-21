@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -33,7 +33,8 @@ def sha256_file(path: Path) -> str:
 
 
 def iso_now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
+    # timezone.utc rather than datetime.UTC: the latter is 3.11+ only.
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def run_id(system: str, version: str, condition: str, stamp: str) -> str:
