@@ -7,8 +7,9 @@
 8 kHz · mu-law · 300-3400 Hz passband · packet loss
 
 [![ci](https://github.com/mahimailabs/handset-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/mahimailabs/handset-bench/actions/workflows/ci.yml)
-[![pypi](https://img.shields.io/pypi/v/handset-bench)](https://pypi.org/project/handset-bench/)
-[![python](https://img.shields.io/pypi/pyversions/handset-bench)](https://pypi.org/project/handset-bench/)
+[![pypi](https://img.shields.io/pypi/v/handset-bench?logo=pypi&logoColor=white&color=1f6feb)](https://pypi.org/project/handset-bench/)
+[![python](https://img.shields.io/pypi/pyversions/handset-bench?logo=python&logoColor=white)](https://pypi.org/project/handset-bench/)
+[![reproducibility](https://img.shields.io/badge/reproducibility-0.0pp-brightgreen)](#reproducibility)
 [![licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
 </div>
@@ -25,6 +26,28 @@ the scoring rules are all frozen.
 ```bash
 pip install handset-bench
 ```
+
+## What it caught
+
+Three things this found on its first two systems, each of which produced a plausible
+number rather than an error. That is the failure mode a benchmark exists to prevent.
+
+**A perfect transcription of a phone number scoring 300% word error rate.** Whisper's
+English normaliser, which nearly everyone scores ASR with, collapses spelled-out digit
+runs into one token, deletes leading zeros (`007` becomes `7`), and deletes bracketed
+spans (`(613)` disappears). Digits were 20% of the test set, so the headline number was
+measuring the text pipeline instead of the audio. [Details below](#the-scoring-rules).
+
+**Both TTS systems producing different audio on every call.** Piper through its VITS
+duration predictor, ZipVoice through unseeded flow matching. The benchmark was comparing
+transcripts of *different recordings* and nothing looked wrong. The only tell was the
+loss series going non-monotonic, with 3% packet loss scoring better than 1%, which
+cannot happen because loss is additive.
+
+**The phone line costing no intelligibility at all.** Both systems scored 0.41 points
+*better* after the G.711 chain than before it, concentrated in times and amounts. Two
+unrelated architectures, the same effect, which points at the recogniser rather than
+either model.
 
 ## Score your own system
 
@@ -171,6 +194,18 @@ see anything else.
 
 Loss is seeded from the utterance id, so the same frames drop every run while still
 varying across the corpus.
+
+## Roadmap and contributing
+
+The [roadmap](https://github.com/mahimailabs/handset-bench/issues/1) is a pinned issue
+with the open work broken out, ranked by whether it changes what the benchmark can
+conclude rather than by effort.
+
+The most useful thing anyone could add is a
+[new adapter](https://github.com/mahimailabs/handset-bench/issues/6): implement
+`version_string` and `synthesize`, and the rest of the harness already works. The
+biggest known weakness is that every result so far rests on a single recogniser, tracked
+in [#2](https://github.com/mahimailabs/handset-bench/issues/2).
 
 ## Where it came from
 
