@@ -1,0 +1,80 @@
+[project]
+name = "handset-bench"
+version = "0.1.0"
+description = "Benchmark text-to-speech on what survives a G.711 telephone line"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Mahimai Raja J", email = "mahimairaja3@gmail.com" }]
+keywords = ["tts", "benchmark", "telephony", "g711", "speech", "asr", "voice"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "torch>=2.4",
+    "torchaudio>=2.4",
+    "numpy>=1.26",
+    "soundfile>=0.12",
+    "jiwer>=3.0",
+    "polars>=1.0",
+    "typer>=0.12",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+    "whisper-normalizer>=0.0.4",
+]
+
+[project.optional-dependencies]
+# Listeners. Neither is needed to use the codec chain or the scoring rules.
+whisper = ["faster-whisper>=1.1"]
+parakeet = ["nemo-toolkit[asr]>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/mahimailabs/handset-bench"
+Repository = "https://github.com/mahimailabs/handset-bench"
+Issues = "https://github.com/mahimailabs/handset-bench/issues"
+"Findings that produced it" = "https://github.com/mahimairaja/DialTone-TTS"
+
+[project.scripts]
+handset-bench = "handset_bench.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/handset_bench"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+# Same rule set the code was written under, so a move does not become a rewrite.
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["handset_bench"]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer declares options as function-call defaults, so B008 is a false positive here.
+"src/handset_bench/cli.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
