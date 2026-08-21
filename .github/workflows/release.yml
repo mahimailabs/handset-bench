@@ -1,0 +1,122 @@
+name: release
+
+# Publishing to PyPI is triggered by publishing a GitHub Release, not by pushing a
+# tag. A tag alone is easy to create by accident; a Release is deliberate, and it
+# gives somewhere for the changelog to live.
+on:
+  release:
+    types: [published]
+
+  # Manual dry run: builds and checks everything, publishes nothing.
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Read the packaged version
+        id: version
+        run: |
+          version=$(uv version --short)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "pyproject declares $version"
+
+      # PyPI versions are immutable. Publishing 0.1.0 from a tag named v0.2.0
+      # cannot be undone, so refuse before it happens rather than after.
+      - name: Tag must match the packaged version
+        if: github.event_name == 'release'
+        # Values go through env rather than being interpolated into the shell, so
+        # nothing from the event can be executed as script.
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${TAG#v}" != "$VERSION" ]; then
+            echo "::error::tag '$TAG' does not match pyproject version '$VERSION'."
+            echo "Fix the version in pyproject.toml, or delete and recreate the release."
+            exit 1
+          fi
+          echo "tag $TAG matches version $VERSION"
+
+      - name: Install
+        run: uv sync
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: The README example must actually run
+        run: uv run python examples/score_your_own.py
+
+  build:
+    name: build
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Check metadata renders on PyPI
+        run: uvx twine check --strict dist/*
+
+      # Install the built wheel somewhere clean and use it. A package that builds
+      # but cannot be imported is the failure this catches.
+      - name: Smoke test the wheel
+        run: |
+          uv venv /tmp/smoke --python 3.12
+          VIRTUAL_ENV=/tmp/smoke uv pip install dist/*.whl
+          /tmp/smoke/bin/python - <<'PY'
+          import torch
+          from handset_bench.codec import phone_line
+          from handset_bench.metrics.wer import normalize
+          from handset_bench.textset import loader
+
+          assert len(loader.load()) == 300
+          assert normalize("(613) 555-0198") == "6 1 3 5 5 5 0 1 9 8"
+          assert phone_line(torch.randn(24000), 24000).shape[0] == 8000
+          print("wheel imports, text set ships, codec runs")
+          PY
+          /tmp/smoke/bin/handset-bench --help > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    # Must match the environment named on the PyPI publisher, or the OIDC
+    # exchange is rejected.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/handset-bench
+    permissions:
+      # Trusted publishing mints a short-lived token from this. No API token is
+      # stored anywhere, and there is nothing to rotate or leak.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
